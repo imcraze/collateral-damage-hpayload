@@ -23,11 +23,13 @@
     <ClCompile Include="ioring_lpe.c" />
     <ClCompile Include="nt_offsets.c" />
     <ClCompile Include="post_exploit.c" />
+    <ClCompile Include="util.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ioring.h" />
     <ClInclude Include="nt_offsets.h" />
     <ClInclude Include="post_exploit.h" />
+    <ClInclude Include="util.h" />
     <ClInclude Include="win_defs.h" />
   </ItemGroup>
   <ItemGroup>

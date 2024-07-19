@@ -7,16 +7,34 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "collat_payload", "collat_pa
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|ARM = Debug|ARM
+		Debug|ARM64 = Debug|ARM64
 		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|ARM = Release|ARM
+		Release|ARM64 = Release|ARM64
 		Release|x64 = Release|x64
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Debug|Any CPU.Build.0 = Debug|x64
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Debug|ARM.ActiveCfg = Debug|x64
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Debug|ARM.Build.0 = Debug|x64
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Debug|ARM64.ActiveCfg = Debug|x64
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Debug|ARM64.Build.0 = Debug|x64
 		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Debug|x64.ActiveCfg = Debug|x64
 		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Debug|x64.Build.0 = Debug|x64
 		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Debug|x86.ActiveCfg = Debug|Win32
 		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Debug|x86.Build.0 = Debug|Win32
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Release|Any CPU.ActiveCfg = Release|x64
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Release|Any CPU.Build.0 = Release|x64
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Release|ARM.ActiveCfg = Release|x64
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Release|ARM.Build.0 = Release|x64
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Release|ARM64.ActiveCfg = Release|x64
+		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Release|ARM64.Build.0 = Release|x64
 		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Release|x64.ActiveCfg = Release|x64
 		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Release|x64.Build.0 = Release|x64
 		{C8172E40-5D40-417A-A6A4-E233C0D1AC12}.Release|x86.ActiveCfg = Release|Win32

