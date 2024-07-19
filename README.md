@@ -1,3 +1,4 @@
+
 # Collateral Damage
 Collateral Damage is a kernel exploit for Xbox SystemOS using [CVE-2024-30088](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2024-30088).
 It targets Xbox One and Xbox Series consoles running kernel versions 25398.4478, 25398.4908, and 25398.4909. The initial entrypoint is via the Game Script UWP application.
@@ -5,6 +6,11 @@ It targets Xbox One and Xbox Series consoles running kernel versions 25398.4478,
 The first stage payloads, PE loader and network loader are provided by [Solstice](https://github.com/exploits-forsale/solstice).
 
 This exploit was developed by [Emma Kirkpatrick](https://x.com/carrot_c4k3) (vulnerability discovery & exploitation) and [Lander Brandt](https://x.com/landaire) (Solstice)
+
+## Disclaimer
+This fork is a **prototype** it isn't nearly finished and has incredibly messy code.  
+Once I'm happy with it's base functionality I'll spend some time cleaning up the code.  
+But just to clarify, as this is a prototype, a lot of features are not completely functional (most notably the *kernel module dumper*).  
 
 ## Important Caveats
 
