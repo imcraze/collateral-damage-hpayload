@@ -323,8 +323,8 @@ void kwrite(UINT64 addr, PVOID data, SIZE_T size) {
     ioring_write(0x65007500, &pIoRing->RegBuffersCount, data, size);
 }
 
-void krnl_write(UINT64 addr, PVOID data, SIZE_T size) {
-    ioring_write(0x65007500, addr, data, size);
+int krnl_write(UINT64 addr, PVOID data, SIZE_T size) {
+    return ioring_write(0x65007500, addr, data, size);
 }
 
 int krnl_read(UINT64 addr, PVOID buffer, SIZE_T size) {

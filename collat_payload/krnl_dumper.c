@@ -84,6 +84,7 @@ int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleIn
         sock_log(s, "[!] Invalid NT signature.\n");
         return 2;
     }
+
     SIZE_T sectionHeaderTableSize = sizeof(IMAGE_SECTION_HEADER) * ntHeader.FileHeader.NumberOfSections;
     PIMAGE_SECTION_HEADER sectionHeader = (PIMAGE_SECTION_HEADER)malloc(sectionHeaderTableSize);
     sprintf_s(ptr_msg,
@@ -122,25 +123,61 @@ int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleIn
     FILE* file = fopen(filePath, "wb");
     if (!file) {
         sock_log(s, "[!] Failed to open output file.\n");
-        //free(headersBuffer);a
+        free(filePath);
+        free(sectionHeader);
         return 3;
     }
 
-    SIZE_T headerSize = sizeof(IMAGE_DOS_HEADER) + sizeof(IMAGE_NT_HEADERS64) + sectionHeaderTableSize;
-    char* headers = (char*)malloc(headerSize);
-    memcpy(headers, &dosHeader, sizeof(dosHeader));
-    memcpy(headers + sizeof(dosHeader), &ntHeader, sizeof(ntHeader));
-    memcpy(headers + sizeof(dosHeader) + sizeof(ntHeader), sectionHeader, sectionHeaderTableSize);
+    /*for (int i = 0; i < ntHeader.FileHeader.NumberOfSections; i++) {
+        //break; // skip for testing
+        PIMAGE_SECTION_HEADER pSection = &sectionHeader[i];
+        pSection->PointerToRawData = pSection->VirtualAddress;
+        pSection->SizeOfRawData = pSection->Misc.VirtualSize;
+    }*/
+    
+    unsigned char dosStub[] = {
+        0x0E, 0x1F, 0xBA, 0x0E, 0x00, 0xB4, 0x09, 0xCD, 0x21, 0xB8, 0x01, 0x4C,
+        0xCD, 0x21, 0x54, 0x68, 0x69, 0x73, 0x20, 0x70, 0x72, 0x6F, 0x67, 0x72,
+        0x61, 0x6D, 0x20, 0x63, 0x61, 0x6E, 0x6E, 0x6F, 0x74, 0x20, 0x62, 0x65,
+        0x20, 0x72, 0x75, 0x6E, 0x20, 0x69, 0x6E, 0x20, 0x44, 0x4F, 0x53, 0x20,
+        0x6D, 0x6F, 0x64, 0x65, 0x2E, 0x0D, 0x0D, 0x0A, 0x24, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00
+    };
 
+    SIZE_T richHeaderAndPadSize = dosHeader.e_lfanew - (sizeof(IMAGE_DOS_HEADER) + sizeof(dosStub));
+    char* richHeaderAndPad = (char*)malloc(richHeaderAndPadSize);
+    if (krnl_read((UINT64)moduleInfo.Base + (sizeof(IMAGE_DOS_HEADER) + sizeof(dosStub)), richHeaderAndPad, richHeaderAndPadSize) != 0) {
+        sock_log(s, "[!] Failed to read rich header!\n");
+
+        free(richHeaderAndPad);
+        free(filePath);
+        free(sectionHeader);
+        return 2;
+    }
+
+    SIZE_T headerSize = sizeof(IMAGE_DOS_HEADER) + sizeof(dosStub) + richHeaderAndPadSize + sizeof(IMAGE_NT_HEADERS64) + sectionHeaderTableSize;
+    char* headers = (char*)malloc(headerSize);
+    memcpy(headers, &dosHeader, sizeof(IMAGE_DOS_HEADER));
+    memcpy(headers + sizeof(IMAGE_DOS_HEADER), dosStub, sizeof(dosStub));
+    memcpy(headers + sizeof(IMAGE_DOS_HEADER) + sizeof(dosStub), richHeaderAndPad, richHeaderAndPadSize);
+    memcpy(headers + sizeof(IMAGE_DOS_HEADER) + sizeof(dosStub) + richHeaderAndPadSize, &ntHeader, sizeof(IMAGE_NT_HEADERS64));
+    memcpy(headers + sizeof(IMAGE_DOS_HEADER) + sizeof(dosStub) + richHeaderAndPadSize + sizeof(IMAGE_NT_HEADERS64), sectionHeader, sectionHeaderTableSize);
+    
     if (fwrite(headers, 1, headerSize, file) != headerSize) {
         sock_log(s, "[!] Failed to headers write to output file.\n");
         fclose(file);
         free(headers);
+        free(richHeaderAndPad);
+        free(filePath);
+        free(sectionHeader);
         return 4;
     }
 
+    
+    
     free(headers);
-
+    free(richHeaderAndPad);
+    
 
 
     //PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)headersBuffer;
@@ -197,6 +234,8 @@ int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleIn
             return 6;
         }
 
+        
+        fseek(file, pSection->VirtualAddress, SEEK_SET);
         if (fwrite(sectionBuffer, 1, sectionSize, file) != sectionSize) {
             sock_log(s, "[!] Failed to write section to file\n");
             free(sectionBuffer);
@@ -210,6 +249,7 @@ int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleIn
     }
 
     fclose(file);
+    free(filePath);
     free(sectionHeader);
     return 0;
 }
