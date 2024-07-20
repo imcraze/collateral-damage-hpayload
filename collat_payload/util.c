@@ -1,3 +1,5 @@
+#include "util.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -61,4 +63,8 @@ char* get_error_name(DWORD errorCode) {
     else {
         return GetLastError();
     }
+}
+
+void sock_log(SOCKET sock, char* msg) {
+    send(sock, msg, strlen(msg), 0);
 }
