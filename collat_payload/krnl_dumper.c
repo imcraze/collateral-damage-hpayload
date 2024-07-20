@@ -37,7 +37,7 @@ UINT64 kernel_sigscan(UINT64 baseAddress, UINT64 size, CHAR* signature, SIZE_T s
 
 UINT64 GetPteAddress(UINT64 virtualAddress) { // offsets from Windows 10.0.19045.4651 (will take a look at xbox ntoskrnl.exe once dumped)
     virtualAddress >>= 9;
-    virtualAddress += 0x7FFFFFFFF8;
+    virtualAddress &= 0x7FFFFFFFF8;
 
     UINT64 pageTableAddress = 0xFFFFF68000000000;
     return pageTableAddress += virtualAddress;
@@ -126,12 +126,13 @@ int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleIn
         return 3;
     }
 
-    char* headers = (char*)malloc(sizeof(IMAGE_DOS_HEADER) + sizeof(IMAGE_NT_HEADERS64) + sectionHeaderTableSize);
+    SIZE_T headerSize = sizeof(IMAGE_DOS_HEADER) + sizeof(IMAGE_NT_HEADERS64) + sectionHeaderTableSize;
+    char* headers = (char*)malloc(headerSize);
     memcpy(headers, &dosHeader, sizeof(dosHeader));
     memcpy(headers + sizeof(dosHeader), &ntHeader, sizeof(ntHeader));
     memcpy(headers + sizeof(dosHeader) + sizeof(ntHeader), sectionHeader, sectionHeaderTableSize);
 
-    if (fwrite(headers, 1, sizeof(headers), file) != sizeof(headers)) {
+    if (fwrite(headers, 1, headerSize, file) != headerSize) {
         sock_log(s, "[!] Failed to headers write to output file.\n");
         fclose(file);
         free(headers);
@@ -148,6 +149,7 @@ int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleIn
 
     sock_log(s, "[?] Dumping sections...\n");
     for (int i = 0; i < ntHeader.FileHeader.NumberOfSections; i++) { // TODO: segments being doubled for some reason?? also, file header is malformed, check header code
+        //break; // skip for testing
         PIMAGE_SECTION_HEADER pSection = &sectionHeader[i];
         UINT64 sectionStart = (UINT64)moduleInfo.Base + pSection->VirtualAddress;
         SIZE_T sectionSize = pSection->Misc.VirtualSize;
@@ -179,11 +181,6 @@ int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleIn
             continue;
         }*/
 
-        sprintf_s(ptr_msg,
-            sizeof(ptr_msg),
-            "[?] [%s/0x%llx/%zu]\n", pSection->Name, sectionStart, sectionSize);
-        sock_log(s, ptr_msg);
-
         char* sectionBuffer = (char*)malloc(sectionSize);
         if (!sectionBuffer) {
             sock_log(s, "[!] Failed to allocation section buffer.\n");
@@ -209,7 +206,7 @@ int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleIn
         }
 
         free(sectionBuffer);
-        continue; // shouldnt be necessary
+        
     }
 
     fclose(file);
