@@ -4,6 +4,45 @@
 #include "win_defs.h"
 #include "util.h"
 
+
+
+BOOL match_sig(CHAR* buffer, CHAR* signature, SIZE_T signatureSize) {
+    for (SIZE_T i = 0; i < signatureSize; i++) {
+        if (signature[i] != 0xff && buffer[i] != signature[i]) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+UINT64 kernel_sigscan(UINT64 baseAddress, UINT64 size, CHAR* signature, SIZE_T signatureSize) {
+    if (baseAddress == NULL || size == 0 || signature == NULL || signatureSize == 0) 
+        return NULL;
+    
+    CHAR* buffer = (CHAR*)malloc(size);
+    if (krnl_read(baseAddress, buffer, size) != 0) {
+        free(buffer);
+        return NULL;
+    }
+
+    for (SIZE_T i = 0; i <= size - signatureSize; i++) {
+        if (match_sig(buffer + i, signature, signatureSize)) {
+            return baseAddress + i;
+        }
+    }
+
+    free(buffer);
+    return NULL;
+}
+
+UINT64 GetPteAddress(UINT64 virtualAddress) { // offsets from Windows 10.0.19045.4651 (will take a look at xbox ntoskrnl.exe once dumped)
+    virtualAddress >>= 9;
+    virtualAddress += 0x7FFFFFFFF8;
+
+    UINT64 pageTableAddress = 0xFFFFF68000000000;
+    return pageTableAddress += virtualAddress;
+}
+
 int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleInfo, BOOL forceDumpInit) {
 
     if (strcmp(name, "ntoskrnl.exe") == 0) { // will take a look at once driver dumper works for normal drivers
@@ -480,6 +519,17 @@ void dump_kmodules(SOCKET sock) {
         else {
             moduleName = pModuleInfo->Module[i].ImageName;
         }
+
+        if (0 || _stricmp(moduleName, "ntoskrnl.exe")) { // need to iterate through sections and only read .text otherwise crash. therefore, i need to fix ntoskrnl header parsing or whatever
+            CHAR getPteAddressSignature[] = { 0x48, 0xc1, 0xe9, 0xff, 0x48, 0xb8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x48, 0x23, 0xc8, 0x48, 0xb8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x48, 0x03, 0xc1 };
+            UINT64 getPteAddress_addr = kernel_sigscan((UINT64)(pModuleInfo->Module[i].Base) + 0x200000, 0x3cd000, getPteAddressSignature, sizeof(getPteAddressSignature)); // hopefully .text and no crash?
+            sprintf_s(ptr_msg,
+                sizeof(ptr_msg),
+                "[?] MiGetPteAddress: 0x%llx\n",
+                getPteAddress_addr);
+            sock_log(sock, ptr_msg);
+        }
+
         BOOL b = FALSE;
         for (int i2 = 0; i2 < moduleCnt; i2++) {
             if (_stricmp(moduleName, modules[i2]) == 0) {
