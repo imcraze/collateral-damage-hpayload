@@ -10,7 +10,7 @@ This exploit was developed by [Emma Kirkpatrick](https://x.com/carrot_c4k3) (vul
 ## Disclaimer
 This fork is a **prototype** it isn't nearly finished and has incredibly messy code.  
 Once I'm happy with it's base functionality I'll spend some time cleaning up the code.  
-But just to clarify, as this is a prototype, a lot of features are not completely functional (most notably the *kernel module dumper*).  
+But just to clarify, as this is a prototype, a lot of features are not completely functional (e.g: kernel module dumper cannot dump *ntoskrnl.exe* headers **yet**).  
 
 ## Important Caveats
 
