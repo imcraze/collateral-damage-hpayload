@@ -201,6 +201,121 @@ typedef struct _KEVENT
     struct _DISPATCHER_HEADER Header;
 } KEVENT, * PKEVENT;
 
+/*typedef struct _MMPTE_HARDWARE
+{
+    ULONGLONG Valid : 1;
+    ULONGLONG Write : 1;
+    ULONGLONG Owner : 1;
+    ULONGLONG WriteThrough : 1;
+    ULONGLONG CacheDisable : 1;
+    ULONGLONG Accessed : 1;
+    ULONGLONG Dirty : 1;
+    ULONGLONG LargePage : 1;
+    ULONGLONG Global : 1;
+    ULONGLONG CopyOnWrite : 1;
+    ULONGLONG Prototype : 1;
+    ULONGLONG reserved0 : 1;
+    ULONGLONG PageFrameNumber : 36;
+    ULONGLONG reserved1 : 4;
+    ULONGLONG SoftwareWsIndex : 11;
+    ULONGLONG NoExecute : 1;
+} MMPTE_HARDWARE, * PMMPTE_HARDWARE;
+
+typedef struct _MMPTE
+{
+    union
+    {
+        ULONGLONG Long;
+        MMPTE_HARDWARE Hard;
+        // Other union members may exist for different PTE types (e.g., prototype PTE, transition PTE)
+    } u;
+} MMPTE, * PMMPTE;*/
+
+struct _MMPTE_HARDWARE
+{
+    ULONGLONG Valid : 1;                                                      //0x0
+    ULONGLONG Dirty1 : 1;                                                     //0x0
+    ULONGLONG Owner : 1;                                                      //0x0
+    ULONGLONG WriteThrough : 1;                                               //0x0
+    ULONGLONG CacheDisable : 1;                                               //0x0
+    ULONGLONG Accessed : 1;                                                   //0x0
+    ULONGLONG Dirty : 1;                                                      //0x0
+    ULONGLONG LargePage : 1;                                                  //0x0
+    ULONGLONG Global : 1;                                                     //0x0
+    ULONGLONG CopyOnWrite : 1;                                                //0x0
+    ULONGLONG Unused : 1;                                                     //0x0
+    ULONGLONG Write : 1;                                                      //0x0
+    ULONGLONG PageFrameNumber : 40;                                           //0x0
+    ULONGLONG ReservedForSoftware : 4;                                        //0x0
+    ULONGLONG WsleAge : 4;                                                    //0x0
+    ULONGLONG WsleProtection : 3;                                             //0x0
+    ULONGLONG NoExecute : 1;                                                  //0x0
+};
+
+struct _MMPTE_PROTOTYPE
+{
+    ULONGLONG Valid : 1;                                                      //0x0
+    ULONGLONG DemandFillProto : 1;                                            //0x0
+    ULONGLONG HiberVerifyConverted : 1;                                       //0x0
+    ULONGLONG ReadOnly : 1;                                                   //0x0
+    ULONGLONG SwizzleBit : 1;                                                 //0x0
+    ULONGLONG Protection : 5;                                                 //0x0
+    ULONGLONG Prototype : 1;                                                  //0x0
+    ULONGLONG Combined : 1;                                                   //0x0
+    ULONGLONG Unused1 : 4;                                                    //0x0
+    LONGLONG ProtoAddress : 48;                                               //0x0
+};
+
+struct _MMPTE_SOFTWARE
+{
+    ULONGLONG Valid : 1;                                                      //0x0
+    ULONGLONG PageFileReserved : 1;                                           //0x0
+    ULONGLONG PageFileAllocated : 1;                                          //0x0
+    ULONGLONG ColdPage : 1;                                                   //0x0
+    ULONGLONG SwizzleBit : 1;                                                 //0x0
+    ULONGLONG Protection : 5;                                                 //0x0
+    ULONGLONG Prototype : 1;                                                  //0x0
+    ULONGLONG Transition : 1;                                                 //0x0
+    ULONGLONG PageFileLow : 4;                                                //0x0
+    ULONGLONG UsedPageTableEntries : 10;                                      //0x0
+    ULONGLONG ShadowStack : 1;                                                //0x0
+    ULONGLONG OnStandbyLookaside : 1;                                         //0x0
+    ULONGLONG Unused : 4;                                                     //0x0
+    ULONGLONG PageFileHigh : 32;                                              //0x0
+};
+
+typedef struct _MMPTE
+{
+    union
+    {
+        ULONGLONG Long;                                                     //0x0
+        volatile ULONGLONG VolatileLong;                                    //0x0
+        struct _MMPTE_HARDWARE Hard;                                        //0x0
+        struct _MMPTE_PROTOTYPE Proto;                                      //0x0
+        struct _MMPTE_SOFTWARE Soft;                                        //0x0
+        /*struct _MMPTE_TIMESTAMP TimeStamp;                                  //0x0
+        struct _MMPTE_TRANSITION Trans;                                     //0x0
+        struct _MMPTE_SUBSECTION Subsect;                                   //0x0
+        struct _MMPTE_LIST List;                                            //0x0*/
+    } u;                                                                    //0x0
+} MMPTE, * PMMPTE;
+
+typedef struct PTE {
+    UINT64 present : 1;
+    UINT64 rw : 1;
+    UINT64 user : 1;
+    UINT64 pwt : 1;
+    UINT64 pcd : 1;
+    UINT64 accessed : 1;
+    UINT64 dirty : 1;
+    UINT64 pat : 1;
+    UINT64 global : 1;
+    UINT64 available : 3;
+    UINT64 frame : 40;
+    UINT64 reserved : 11;
+    UINT64 nx : 1;
+} PTE;
+
 
 //NTSYSCALLAPI NTSTATUS NTAPI NtCreateFile(PHANDLE FileHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes, PIO_STATUS_BLOCK IoStatusBlock, PLARGE_INTEGER AllocationSize, ULONG FileAttributes, ULONG ShareAccess, ULONG CreateDisposition, ULONG CreateOptions, PVOID EaBuffer, ULONG EaLength);
 //NTSYSCALLAPI NTSTATUS NTAPI NtDeviceIoControlFile(HANDLE FileHandle, HANDLE Event, VOID* ApcRoutine, PVOID ApcContext, PIO_STATUS_BLOCK IoStatusBlock, ULONG IoControlCode, PVOID InputBuffer, ULONG InputBufferLength, PVOID OutputBuffer, ULONG OutputBufferLength);

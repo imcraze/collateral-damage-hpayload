@@ -87,6 +87,10 @@ int map_region();
 int race_succeeded(ULONG ulFakeRegBufferCnt, UINT64 ioring_addr);
 ULONG64 get_sys_token();
 ULONG64 get_systok2();
+ULONG64 get_pagetable_addr();
+
+MMPTE get_pagetable_entry(UINT64 virtualAddress, PUINT64 pteAddressOut);
+void set_pagetable_addr(ULONG64 pageTableAddress);
 
 extern ULONG64 ullSystemEPROCaddr;
  

@@ -6,51 +6,132 @@
 
 
 
-BOOL match_sig(CHAR* buffer, CHAR* signature, SIZE_T signatureSize) {
-    for (SIZE_T i = 0; i < signatureSize; i++) {
-        if (signature[i] != 0xff && buffer[i] != signature[i]) {
-            return FALSE;
-        }
-    }
-    return TRUE;
-}
-
-UINT64 kernel_sigscan(UINT64 baseAddress, UINT64 size, CHAR* signature, SIZE_T signatureSize) {
-    if (baseAddress == NULL || size == 0 || signature == NULL || signatureSize == 0) 
-        return NULL;
-    
-    CHAR* buffer = (CHAR*)malloc(size);
-    if (krnl_read(baseAddress, buffer, size) != 0) {
-        free(buffer);
+char* read_null_terminated_string(UINT64 addr) {
+    // Allocate a buffer for reading data
+    // Start with a reasonable initial buffer size
+    SIZE_T buffer_size = 256;
+    char* buffer = (char*)malloc(buffer_size);
+    if (!buffer) {
+        printf("Memory allocation failed\n");
         return NULL;
     }
 
-    for (SIZE_T i = 0; i <= size - signatureSize; i++) {
-        if (match_sig(buffer + i, signature, signatureSize)) {
-            return baseAddress + i;
+    // Read data from the given address
+    SIZE_T offset = 0;
+    char* temp_buffer = buffer;
+    while (1) {
+        // Read a chunk of data into the buffer
+        if (krnl_read(addr + offset, temp_buffer, buffer_size - offset) != 0) {
+            // If reading fails, free allocated memory and return NULL
+            free(buffer);
+            return NULL;
+        }
+
+        // Find the null terminator in the buffer
+        char* null_terminator = (char*)memchr(temp_buffer, '\0', buffer_size - offset);
+        if (null_terminator != NULL) {
+            // Null terminator found, return the string
+            *null_terminator = '\0'; // Ensure the string is properly null-terminated
+            return buffer;
+        }
+
+        // No null terminator found, expand the buffer and continue reading
+        buffer_size *= 2; // Double the buffer size
+        char* new_buffer = (char*)realloc(buffer, buffer_size);
+        if (!new_buffer) {
+            // If realloc fails, free the old buffer and return NULL
+            free(buffer);
+            return NULL;
+        }
+        buffer = new_buffer;
+        temp_buffer = buffer + offset;
+    }
+}
+
+int dump_bin(SOCKET s, char* name, UINT64 base, SIZE_T size) { // just for testing
+    CHAR ptr_msg[1024] = { 0 };
+
+    char* pBuffer = (char*)malloc(size);
+    for (SIZE_T i = 0; i < size; i += 0x1000) {
+        sprintf_s(ptr_msg,
+            sizeof(ptr_msg),
+            "\r[?] Reading %s page [0x%llx]", name, base + i);
+        sock_log(s, ptr_msg);
+        if (krnl_read_s(base + i, pBuffer + i, 0x1000) == 0x5adface) {
+            sock_log(s, " (dead page)\n");
         }
     }
 
-    free(buffer);
-    return NULL;
-}
+    char* dumpDirectory = "D:\\hpayload\\dump_bin\\";
+    size_t pathLen = strlen(dumpDirectory) + strlen(name) + 1;
 
-UINT64 GetPteAddress(UINT64 virtualAddress) { // offsets from Windows 10.0.19045.4651 (will take a look at xbox ntoskrnl.exe once dumped)
-    virtualAddress >>= 9;
-    virtualAddress &= 0x7FFFFFFFF8;
+    char* filePath = (char*)malloc(pathLen * sizeof(char));
+    strcpy(filePath, dumpDirectory);
+    strcat(filePath, name);
+    strcat(filePath, ".bin");
 
-    UINT64 pageTableAddress = 0xFFFFF68000000000;
-    return pageTableAddress += virtualAddress;
+    FILE* file = fopen(filePath, "wb");
+
+    if (fwrite(pBuffer, 1, size, file) != size) {
+        sock_log(s, "[!] Failed to write to file.\n");
+        fclose(file);
+        return 1;
+    }
+
+    sprintf_s(ptr_msg,
+        sizeof(ptr_msg),
+        "\n[?] Dumped binary '%s' to %s\n", name, filePath);
+    sock_log(s, ptr_msg);
+    fclose(file);
+    free(pBuffer);
+    return 0;
 }
 
 int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleInfo, BOOL forceDumpInit) {
+    CHAR ptr_msg[1024] = { 0 };
 
     if (strcmp(name, "ntoskrnl.exe") == 0) { // will take a look at once driver dumper works for normal drivers
-        sock_log(s, "[?] Skipping ntoskrnl.exe (i think it does nifty shit)\n");
+        return 1337;
+        sock_log(s, "[?] treating ntoskrnl specially :)\n");
+
+        // should dump approximately the bounds of the .text segment? hopefully?
+        //dump_bin(s, "ntoskrnl.exe_0x5cd000", (UINT64)moduleInfo.Base + 0x5ab000 - 0x3a5000, 0x195000 + 0x3a5000); // largest size without crash -- 0x5cd000, 0x173000 -- 0x5bb000, 0x185000
+        
+        //dump_bin(s, "shared_system_page", 0xfffff78000000000, 0x1000);
+        //dump_bin(s, "hal_loader_mappings", 0xffffffffffc00000, 0x80000);
+
+        dump_bin(s, name, moduleInfo.Base, moduleInfo.Size); // might take a while
+        return 1337;
+        unsigned char dump[64] = { 0 };
+        sock_log(s, "[?] Reading ntoskrnl header... ");
+        if (krnl_read((UINT64)moduleInfo.Base, dump, sizeof(dump)) != 0) {
+            sock_log(s, "Failed!\n");
+            return 2;
+        }
+        sock_log(s, "Done!\n");
+
+        //char out[256] = { 0 }; // probably should malloc this ngl
+        //hex_dump(dump, sizeof(dump), out);
+
+        //sprintf_s(ptr_msg,
+        //    sizeof(ptr_msg),
+        //    "[?] ntoskrnl.exe headers (?):\n%s\n", out);
+        //sock_log(s, ptr_msg);
+
+        //for (SIZE_T i = 0; i < sizeof(dump); i++) {
+        //    sprintf_s(ptr_msg,
+        //        sizeof(ptr_msg),
+        //        "%hhx", dump[i]);
+        //    sock_log(s, ptr_msg);
+        //}
+        //sock_log(s, "\n");
+
         return 1337;
     }
 
-    CHAR ptr_msg[1024] = { 0 };
+    dump_bin(s, name, moduleInfo.Base, moduleInfo.Size);
+
+    
 
     /*SIZE_T headersSize = 4096 / 2; // should contain headers
     char* headersBuffer = (char*)malloc(headersSize);
@@ -95,9 +176,60 @@ int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleIn
         sock_log(s, "Failed!\n");
         return 2;
     }
-
     
     sock_log(s, "Done!\n");
+
+    /*PIMAGE_EXPORT_DIRECTORY exports = (PIMAGE_EXPORT_DIRECTORY)malloc(sizeof(IMAGE_EXPORT_DIRECTORY));
+    krnl_read((UINT64)moduleInfo.Base + ntHeader.OptionalHeader.DataDirectory[0].VirtualAddress, exports, sizeof(IMAGE_EXPORT_DIRECTORY));
+
+    PDWORD nameTable = (PDWORD)malloc(exports->NumberOfNames);
+    krnl_read((UINT64)moduleInfo.Base + exports->AddressOfNames, nameTable, exports->NumberOfNames);
+
+    sprintf_s(ptr_msg,
+        sizeof(ptr_msg),
+        "[?] Export table has %i functions and %i names. Dumping:\n", exports->NumberOfFunctions, exports->NumberOfNames);
+    sock_log(s, ptr_msg);
+
+    for (SIZE_T i = 0; i < exports->NumberOfNames; i++) {
+        char* name = read_null_terminated_string((UINT64)moduleInfo.Base + nameTable[i]);
+        sprintf_s(ptr_msg,
+            sizeof(ptr_msg),
+            "%s\n", name);
+        sock_log(s, ptr_msg);
+    }
+
+    free(exports);
+    free(nameTable);*/
+
+    /*for (SIZE_T i = 0; i < 16; i++) {
+        PIMAGE_DATA_DIRECTORY pDataDirectory = &ntHeader.OptionalHeader.DataDirectory[i];
+        sprintf_s(ptr_msg,
+            sizeof(ptr_msg),
+            "[?] DATA_DIRECTORY [%i] [0x%llx/%i]\n", i, (UINT64)((UINT64)moduleInfo.Base + pSection->VirtualAddress), pDataDirectory->Size);
+        sock_log(s, ptr_msg);
+        continue;
+        if (pDataDirectory->VirtualAddress == 0 || pDataDirectory->Size == 0) 
+            continue;
+        
+        char* buffer = (char*)malloc(pDataDirectory->Size);
+        krnl_read((UINT64)moduleInfo.Base + pDataDirectory->VirtualAddress, buffer, pDataDirectory->Size);
+
+        size_t data_size = sizeof(buffer);
+        size_t num_lines = (data_size + 15) / 16;
+        size_t output_size = num_lines * HEXDUMP_LINE_SIZE + 1; // +1 for null terminator
+        char* out = (char*)malloc(output_size);
+        hex_dump(buffer, sizeof(buffer), out);
+
+        sprintf_s(ptr_msg,
+            sizeof(ptr_msg),
+            "[?] DATA_DIRECTORY [%i]:\n%s\n",i, out);
+        sock_log(s, ptr_msg);
+        free(out);
+        free(buffer);
+    }*/
+
+    
+    
 
     sprintf_s(ptr_msg,
         sizeof(ptr_msg),
@@ -188,7 +320,7 @@ int dump_kmodule2(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleIn
     for (int i = 0; i < ntHeader.FileHeader.NumberOfSections; i++) { // TODO: segments being doubled for some reason?? also, file header is malformed, check header code
         //break; // skip for testing
         PIMAGE_SECTION_HEADER pSection = &sectionHeader[i];
-        UINT64 sectionStart = (UINT64)moduleInfo.Base + pSection->VirtualAddress;
+        UINT64 sectionStart = (UINT64)((UINT64)moduleInfo.Base + pSection->VirtualAddress);
         SIZE_T sectionSize = pSection->Misc.VirtualSize;
         
         if ((pSection->Characteristics & IMAGE_SCN_MEM_DISCARDABLE)) { // look into MiGetPteAddress, perhaps remnants of discarded sections can be found? otherwise we're out of luck
@@ -555,16 +687,6 @@ void dump_kmodules(SOCKET sock) {
         }
         else {
             moduleName = pModuleInfo->Module[i].ImageName;
-        }
-
-        if (0 && _stricmp(moduleName, "ntoskrnl.exe")) { // need to iterate through sections and only read .text otherwise crash. therefore, i need to fix ntoskrnl header parsing or whatever
-            CHAR getPteAddressSignature[] = { 0x48, 0xc1, 0xe9, 0xff, 0x48, 0xb8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x48, 0x23, 0xc8, 0x48, 0xb8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x48, 0x03, 0xc1 };
-            UINT64 getPteAddress_addr = kernel_sigscan((UINT64)(pModuleInfo->Module[i].Base) + 0x200000, 0x3cd000, getPteAddressSignature, sizeof(getPteAddressSignature)); // hopefully .text and no crash?
-            sprintf_s(ptr_msg,
-                sizeof(ptr_msg),
-                "[?] MiGetPteAddress: 0x%llx\n",
-                getPteAddress_addr);
-            sock_log(sock, ptr_msg);
         }
 
         BOOL b = FALSE;

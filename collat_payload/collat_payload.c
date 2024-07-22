@@ -516,7 +516,7 @@ int main(int argc, char** argv)
     send(winSock, cur_msg, strlen(cur_msg), 0);
 
     // Run our post-exploitation code
-    post_exploit(winSock);
+    post_exploit(winSock, g_kernel_base);
     
 
 	return 0;
