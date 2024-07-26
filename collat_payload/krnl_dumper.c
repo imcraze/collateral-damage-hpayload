@@ -228,95 +228,19 @@ int dump_kmodule(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleInf
 }
 
 void dump_kmodules(SOCKET sock) {
-    //sock_log(sock, "[?] dump_kmodules\n")
-
-    HANDLE hFile = CreateFile(
-        L"D:\\hpayload\\dump_modules.txt",
-        GENERIC_READ,
-        FILE_SHARE_READ,
-        NULL,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
-
-    if (hFile == INVALID_HANDLE_VALUE) {
-        sock_log(sock, "[!] Unable to open D:\\hpayload\\dump_modules.txt, skipping kernel dump.\n");
+    if (!CreateDirectoryA("D:\\hpayload", NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+        sock_log(sock, "[!] Failed to create hpayload directory, skipping dump.\n");
         return;
     }
 
-    HANDLE hForceDumpInit = CreateFile(
-        L"D:\\hpayload\\force_dump_init",
-        GENERIC_READ,
-        FILE_SHARE_READ,
-        NULL,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
-
-    BOOL forceDumpInit = FALSE;
-    if (hForceDumpInit != INVALID_HANDLE_VALUE) {
-        sock_log(sock, "[?] force_dump_init found, will attempt to dump INIT segment despite discard flag.\n");
-        forceDumpInit = TRUE;
-        CloseHandle(hForceDumpInit);
+    if (!CreateDirectoryA("D:\\hpayload\\dumped_modules", NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+        sock_log(sock, "[!] Failed to create dump directory, skipping dump.\n");
+        return;
     }
-
-    char buffer[256];
-    DWORD bytesRead;
-    char line[256];
-    int linePos = 0;
 
     CHAR ptr_msg[1024] = { 0 };
 
-    CHAR* modules[64] = { 0 };
-    int moduleCnt = 0;
-
-    sock_log(sock, "[?] Reading requested modules... ");
-    while (ReadFile(hFile, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
-        buffer[bytesRead] = '\0';
-        for (DWORD i = 0; i < bytesRead; i++) {
-            if (buffer[i] == '\n') {
-                line[linePos] = '\0';
-                // potential overflow, i know, and i dont care
-                modules[moduleCnt] = malloc(strlen(line) + 1);
-                strcpy(modules[moduleCnt], line);
-                moduleCnt++;
-                linePos = 0;
-            }
-            else if (buffer[i] != '\r') {
-                line[linePos++] = buffer[i];
-
-
-            }
-        }
-    }
-
-    if (linePos > 0) {
-        line[linePos] = '\0'; // Null-terminate the last line if it doesn't end with a newline
-        modules[moduleCnt] = malloc(strlen(line) + 1);
-        strcpy(modules[moduleCnt], line);
-        moduleCnt++;
-    }
-
-    sock_log(sock, "Done!\n");
-
-    sprintf_s(ptr_msg,
-        sizeof(ptr_msg),
-        "[?] Module count: %i\n", moduleCnt);
-    sock_log(sock, ptr_msg);
-    sock_log(sock, "[?] Requested modules:\n");
-    for (int i = 0; i < moduleCnt; i++) {
-        //if (!modules[i]) sock_log(sock, "shit\n");
-        sprintf_s(ptr_msg, sizeof(ptr_msg), "   - %i:%s\n", i, modules[i]);
-        sock_log(sock, ptr_msg);
-    }
-
-    CloseHandle(hFile);//
-
-
-
-    sock_log(sock, "\n[?] Attempting to grab System Module Information... ");
+    sock_log(sock, "[?] Attempting to grab System Module Information... ");
 
     ULONG len = 0;
     NTSTATUS status = NtQuerySystemInformation(SystemModuleInformation, NULL, 0, &len);
@@ -337,59 +261,43 @@ void dump_kmodules(SOCKET sock) {
 
     sock_log(sock, "Done!\n[?] time to grab modules :)\n");
 
-    int dmpCnt = 0;
-    for (ULONG i = 1; i < pModuleInfo->NumberOfModules; i++) {
-        //if (dmpCnt > moduleCnt)
-        //    break;
+    for (ULONG i = 0; i < pModuleInfo->NumberOfModules; i++) {
         char* moduleName = strrchr(pModuleInfo->Module[i].ImageName, '\\');
         if (moduleName) {
-            moduleName++; // Skip the backslash character
+            moduleName++; 
         }
         else {
             moduleName = pModuleInfo->Module[i].ImageName;
         }
 
         BOOL b = FALSE;
-        //for (int i2 = 0; i2 < moduleCnt; i2++) {
-            //if (_stricmp(moduleName, modules[i2]) == 0) {
-                sprintf_s(ptr_msg,
-                    sizeof(ptr_msg),
-                    "    - %s\n        - base_addr: 0x%llx\n        - size: %lu\n",
-                    moduleName,
-                    pModuleInfo->Module[i].Base,
-                    pModuleInfo->Module[i].Size);
-                sock_log(sock, ptr_msg);
-                int res = dump_kmodule(sock, moduleName, pModuleInfo->Module[i]);
-                //int res = 1;
-                if (res == 0) {
-                    sprintf_s(ptr_msg,
-                        sizeof(ptr_msg),
-                        "[?] %s -> D:\\dumped_modules\\%s\n",
-                        moduleName,
-                        moduleName);
-                    sock_log(sock, ptr_msg);
-                    b = TRUE;
-                }
-                else {
-                    sprintf_s(ptr_msg,
-                        sizeof(ptr_msg),
-                        "[!] Failed to dump %s, error code: 0x%llx\n",
-                        moduleName,
-                        res);
-                    sock_log(sock, ptr_msg);
-                }
-                dmpCnt++;
-                //break;
-            //}
-            //if (b)
-            //    break;
-        //}
-
+        sprintf_s(ptr_msg,
+            sizeof(ptr_msg),
+            "    - %s\n        - base_addr: 0x%llx\n        - size: %lu\n",
+            moduleName,
+            pModuleInfo->Module[i].Base,
+            pModuleInfo->Module[i].Size);
+        sock_log(sock, ptr_msg);
+        int res = dump_kmodule(sock, moduleName, pModuleInfo->Module[i]);
+        if (res == 0) {
+            sprintf_s(ptr_msg,
+                sizeof(ptr_msg),
+                "[?] %s -> D:\\dumped_modules\\%s\n",
+                moduleName,
+                moduleName);
+            sock_log(sock, ptr_msg);
+            b = TRUE;
+        }
+        else {
+            sprintf_s(ptr_msg,
+                sizeof(ptr_msg),
+                "[!] Failed to dump %s, error code: 0x%llx\n",
+                moduleName,
+                res);
+            sock_log(sock, ptr_msg);
+        }
     }
 
     sock_log(sock, "[?] Finished.\n");
     free(pModuleInfo);
-
-
-
 }

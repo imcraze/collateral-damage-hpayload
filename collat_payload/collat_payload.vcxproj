@@ -20,28 +20,24 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="collat_payload.c" />
-    <ClCompile Include="dict.c" />
     <ClCompile Include="ioring_lpe.c" />
     <ClCompile Include="krnl_dumper.c" />
     <ClCompile Include="nt_offsets.c" />
     <ClCompile Include="post_exploit.c" />
-    <ClCompile Include="rop.c" />
     <ClCompile Include="util.c" />
-    <ClCompile Include="Zydis.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="dict.h" />
     <ClInclude Include="ioring.h" />
     <ClInclude Include="krnl_dumper.h" />
     <ClInclude Include="nt_offsets.h" />
     <ClInclude Include="post_exploit.h" />
-    <ClInclude Include="rop.h" />
     <ClInclude Include="util.h" />
     <ClInclude Include="win_defs.h" />
-    <ClInclude Include="Zydis.h" />
   </ItemGroup>
   <ItemGroup>
-    <MASM Include="prefetch_asm.asm" />
+    <MASM Include="prefetch_asm.asm">
+      <FileType>Document</FileType>
+    </MASM>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

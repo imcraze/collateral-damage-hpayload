@@ -7,10 +7,14 @@ The first stage payloads, PE loader and network loader are provided by [Solstice
 
 This exploit was developed by [Emma Kirkpatrick](https://x.com/carrot_c4k3) (vulnerability discovery & exploitation) and [Lander Brandt](https://x.com/landaire) (Solstice)
 
-## Disclaimer
-This fork is a **prototype** it isn't nearly finished and has incredibly messy code.  
-Once I'm happy with it's base functionality I'll spend some time cleaning up the code.  
-But just to clarify, as this is a prototype, a lot of features are not completely functional (e.g: kernel module dumper cannot dump *ntoskrnl.exe* headers **yet**).  
+## Kernel Module Dumper
+This branch contains the code for the kernel module dumper release. It's pretty much the same as the master (prototyping) branch but with a simplified *post_exploit* function, and some removed code.
+
+**FYI**, I have included a python script to fix unresolved near calls, as some modules directly call their import's function addresses rather than referencing the import address table. All script requires is [pefile](https://github.com/erocarrera/pefile), and [numpy](https://github.com/numpy/numpy) which you can install by running `pip install pefile` and `pip install numpy`, respectively.
+
+### Where is _ntoskrnl.exe_?
+The kernel for SystemOS employs some snazzy security on the image headers that I haven't quite fully reversed **yet**. Once I get a clean dump for the kernel, I'll push an update to this branch :)
+
 
 ## Important Caveats
 

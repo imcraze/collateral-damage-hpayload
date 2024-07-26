@@ -10,8 +10,6 @@
 #include "ioring.h"
 #include "nt_offsets.h"
 
-#include "Zydis.h"
-
 // socket stuff
 WSADATA wsaData;
 SOCKET winSock;
