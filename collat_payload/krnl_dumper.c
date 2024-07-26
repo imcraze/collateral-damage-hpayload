@@ -3,55 +3,13 @@
 
 #include "win_defs.h"
 #include "util.h"
+#include "nt_offsets.h"
+#include "ioring.h"
 
-
-
-char* read_null_terminated_string(UINT64 addr) {
-    // Allocate a buffer for reading data
-    // Start with a reasonable initial buffer size
-    SIZE_T buffer_size = 256;
-    char* buffer = (char*)malloc(buffer_size);
-    if (!buffer) {
-        printf("Memory allocation failed\n");
-        return NULL;
-    }
-
-    // Read data from the given address
-    SIZE_T offset = 0;
-    char* temp_buffer = buffer;
-    while (1) {
-        // Read a chunk of data into the buffer
-        if (krnl_read(addr + offset, temp_buffer, buffer_size - offset) != 0) {
-            // If reading fails, free allocated memory and return NULL
-            free(buffer);
-            return NULL;
-        }
-
-        // Find the null terminator in the buffer
-        char* null_terminator = (char*)memchr(temp_buffer, '\0', buffer_size - offset);
-        if (null_terminator != NULL) {
-            // Null terminator found, return the string
-            *null_terminator = '\0'; // Ensure the string is properly null-terminated
-            return buffer;
-        }
-
-        // No null terminator found, expand the buffer and continue reading
-        buffer_size *= 2; // Double the buffer size
-        char* new_buffer = (char*)realloc(buffer, buffer_size);
-        if (!new_buffer) {
-            // If realloc fails, free the old buffer and return NULL
-            free(buffer);
-            return NULL;
-        }
-        buffer = new_buffer;
-        temp_buffer = buffer + offset;
-    }
-}
-
-// should get header address for ntoskrnl.exe (currently doesn't work)
-// perhaps xor keys(?) change each reboot
-UINT64 krnl_header_address(UINT64 baseAddress, UINT64 data) {
-    UINT64 addrOfData = _byteswap_uint64(baseAddress ^ _rotl64(data ^ 0xB0837D93C0205F6E, 110)) ^ 0x1CD8854010D69B96;
+// grab addresses of image header structures and their items
+// still doesn't work despite dynamically grabbing keys?
+UINT64 krnl_header_address(UINT64 baseAddress, UINT64 data, UINT64 key1, UINT64 key2) {
+    UINT64 addrOfData = _byteswap_uint64(baseAddress ^ _rotl64(data ^ key1, 110)) ^ key2;
     return addrOfData;
 }
 
@@ -92,6 +50,39 @@ int dump_bin(SOCKET s, char* name, UINT64 base, SIZE_T size) { // just for testi
     fclose(file);
     free(pBuffer);
     return 0;
+}
+
+HEADER_KEYS ulpHeaderKeys;
+HEADER_KEYS get_header_keys() {
+    return ulpHeaderKeys;
+}
+
+
+// perhaps keys are per function?
+void hdump_get_keys(UINT64 ntBase) {
+    CHAR keySignature[] = HEADER_KEYS_SIGNATURE;
+    UINT64 key1Address;
+    UINT64 page = 0x0;
+    do {
+        key1Address = krnl_sigscan_s(ntBase + 0x200000 + page, 0x1000, keySignature, sizeof(keySignature)); // hopefully is kernel executable bounds, i really dont want to scan a whole image
+        page += 0x1000;
+    } while (key1Address == NULL && page < 0x58a000);
+    krnl_read_s(key1Address, &ulpHeaderKeys.key1, sizeof(UINT64));
+    krnl_read_s(key1Address + 0xd, &ulpHeaderKeys.key2, sizeof(UINT64));
+}
+
+void hdump_rtlimagentheaderex(SOCKET s, UINT64 ntBase) {
+    CHAR ptr_msg[1024] = { 0 };
+    char byteBuffer[0x10] = { 0 };
+    krnl_read_s(ntBase + HEADER_KEY_1_OFFSET, byteBuffer, sizeof(byteBuffer));
+
+    char out[256] = { 0 }; // probably should malloc this ngl
+    hex_dump(byteBuffer, sizeof(byteBuffer), out);
+
+    sprintf_s(ptr_msg,
+        sizeof(ptr_msg),
+        "[?] RtlImageNtHeaderEx:\n%s\n", out);
+    sock_log(s, ptr_msg);
 }
 
 int dump_kmodule(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleInfo) {
@@ -197,6 +188,7 @@ int dump_kmodule(SOCKET s, char* name, SYSTEM_MODULE_INFORMATION_ENTRY moduleInf
     for (WORD i = 0; i < ntHeader.FileHeader.NumberOfSections; ++i, section++) {
         section->PointerToRawData = section->VirtualAddress;
         section->SizeOfRawData = section->Misc.VirtualSize;
+        
 
         sprintf_s(ptr_msg,
             sizeof(ptr_msg),
@@ -346,9 +338,9 @@ void dump_kmodules(SOCKET sock) {
     sock_log(sock, "Done!\n[?] time to grab modules :)\n");
 
     int dmpCnt = 0;
-    for (ULONG i = 0; i < pModuleInfo->NumberOfModules; i++) {
-        if (dmpCnt > moduleCnt)
-            break;
+    for (ULONG i = 1; i < pModuleInfo->NumberOfModules; i++) {
+        //if (dmpCnt > moduleCnt)
+        //    break;
         char* moduleName = strrchr(pModuleInfo->Module[i].ImageName, '\\');
         if (moduleName) {
             moduleName++; // Skip the backslash character
@@ -358,8 +350,8 @@ void dump_kmodules(SOCKET sock) {
         }
 
         BOOL b = FALSE;
-        for (int i2 = 0; i2 < moduleCnt; i2++) {
-            if (_stricmp(moduleName, modules[i2]) == 0) {
+        //for (int i2 = 0; i2 < moduleCnt; i2++) {
+            //if (_stricmp(moduleName, modules[i2]) == 0) {
                 sprintf_s(ptr_msg,
                     sizeof(ptr_msg),
                     "    - %s\n        - base_addr: 0x%llx\n        - size: %lu\n",
@@ -367,7 +359,7 @@ void dump_kmodules(SOCKET sock) {
                     pModuleInfo->Module[i].Base,
                     pModuleInfo->Module[i].Size);
                 sock_log(sock, ptr_msg);
-                int res = dump_kmodule(sock, moduleName, pModuleInfo->Module[i], forceDumpInit);
+                int res = dump_kmodule(sock, moduleName, pModuleInfo->Module[i]);
                 //int res = 1;
                 if (res == 0) {
                     sprintf_s(ptr_msg,
@@ -387,11 +379,11 @@ void dump_kmodules(SOCKET sock) {
                     sock_log(sock, ptr_msg);
                 }
                 dmpCnt++;
-                break;
-            }
-            if (b)
-                break;
-        }
+                //break;
+            //}
+            //if (b)
+            //    break;
+        //}
 
     }
 

